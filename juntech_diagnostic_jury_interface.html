@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incubator - Interface Notation Jury</title>
+
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- Babel pour JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- SheetJS pour Export Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // 1. MOT DE PASSE DU JURY
+        const JURY_PASSWORD = "jury2026";
+
+        // 2. LIEN GOOGLE APPS SCRIPT
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbypriZMAq9goXQKVW5Ju_1luoJ2zSSMxVV5nLR1idhONcDm28RZREmLk-2W5HWSe5ws/exec";
+
+        // TRADUCTIONS FR / EN
+        const I18N = {
+            fr: {
+                appTitle: "Plateforme de Notation Jury",
+                appSubtitle: "Évaluation des réponses recueillies via Google Sheets",
+                refreshBtn: "🔄 Rafraîchir",
+                exportBtn: "Exporter le Rapport Excel",
+                lockBtn: "🔒 Verrouiller",
+                candidatesTitle: "Candidats récents",
+                noCandidates: "Aucune candidature disponible. Cliquez sur 'Rafraîchir'.",
+                loading: "Chargement...",
+                dossierLabel: "Dossier Candidat",
+                founderLabel: "Fondateur",
+                scoreFounder: "Note Volet Fondateur",
+                scoreStartup: "Note Volet Startup",
+                globalMaturity: "Maturité Globale Attribuée",
+                advancement: "d'avancement",
+                founderTab: "1. Volet Fondateur (12 questions)",
+                startupTab: "2. Volet Startup / Projet (14 questions)",
+                scoreJury: "Score Jury :",
+                candidateAnswer: "Réponse transmise par le candidat :",
+                noTextAnswer: "Aucune réponse rédigée.",
+                noOptionAnswer: "Option 'Autre' sélectionnée sans précision.",
+                noCheckboxAnswer: "Aucune option cochée.",
+                noRadioAnswer: "Aucune réponse sélectionnée.",
+                assignScore: "Attribution de la note (1 à 5 pts) :",
+                noSelectionPrompt: "Veuillez sélectionner une candidature dans le bandeau supérieur pour lancer la notation.",
+                submitJuryBtn: "Soumettre l'évaluation définitive",
+                submittingBtn: "Envoi des notes en cours...",
+                submittedSuccess: "Les notes du jury ont été enregistrées avec succès dans Google Sheets !",
+                submitError: "Erreur lors de l'envoi des notes. Veuillez réessayer.",
+                missingScoresTitle: "Évaluation Incomplète",
+                missingScoresMsg: "Certains critères n'ont pas encore reçu de note. Veuillez attribuer une note (1 à 5) à l'ensemble des questions avant de soumettre.",
+                missingFounder: "Volet Fondateur",
+                missingStartup: "Volet Startup",
+                closeBtn: "Compris, compléter",
+                authTitle: "Espace Notation Jury",
+                authSubtitle: "Accès restreint aux évaluateurs et mentors de l'incubateur.",
+                passLabel: "Mot de passe Jury",
+                passPlaceholder: "Saisissez le mot de passe...",
+                wrongPass: "Mot de passe incorrect. Veuillez réessayer.",
+                unlockBtn: "Déverrouiller la Plateforme Jury"
+            },
+            en: {
+                appTitle: "Jury Scoring Platform",
+                appSubtitle: "Evaluation of candidate responses collected via Google Sheets",
+                refreshBtn: "🔄 Refresh",
+                exportBtn: "Export Excel Report",
+                lockBtn: "🔒 Lock",
+                candidatesTitle: "Recent Candidates",
+                noCandidates: "No applications available. Click 'Refresh'.",
+                loading: "Loading...",
+                dossierLabel: "Candidate File",
+                founderLabel: "Founder",
+                scoreFounder: "Founder Section Score",
+                scoreStartup: "Startup Section Score",
+                globalMaturity: "Assigned Overall Maturity",
+                advancement: "progress",
+                founderTab: "1. Founder Section (12 questions)",
+                startupTab: "2. Startup Section (14 questions)",
+                scoreJury: "Jury Score:",
+                candidateAnswer: "Candidate's submitted answer:",
+                noTextAnswer: "No text answer provided.",
+                noOptionAnswer: "'Other' option chosen without text.",
+                noCheckboxAnswer: "No option checked.",
+                noRadioAnswer: "No answer selected.",
+                assignScore: "Score assignment (1 to 5 pts):",
+                noSelectionPrompt: "Please select an application from the top bar to begin scoring.",
+                submitJuryBtn: "Submit final evaluation",
+                submittingBtn: "Submitting scores...",
+                submittedSuccess: "Jury scores successfully saved to Google Sheets!",
+                submitError: "Error submitting scores. Please try again.",
+                missingScoresTitle: "Incomplete Evaluation",
+                missingScoresMsg: "Some criteria have not been scored yet. Please assign a score (1 to 5) to all questions before submitting.",
+                missingFounder: "Founder Section",
+                missingStartup: "Startup Section",
+                closeBtn: "Got it, complete now",
+                authTitle: "Jury Scoring Space",
+                authSubtitle: "Restricted access for incubator evaluators and mentors.",
+                passLabel: "Jury Password",
+                passPlaceholder: "Enter password...",
+                wrongPass: "Incorrect password. Please try again.",
+                unlockBtn: "Unlock Jury Platform"
+            }
+        };
+
+        // COULEURS DES BADGES DE CATÉGORIE
+        const CATEGORY_STYLES = {
+            'Engagement': 'bg-rose-100 text-rose-800 border-rose-200',
+            'Leadership': 'bg-purple-100 text-purple-800 border-purple-200',
+            'Execution': 'bg-amber-100 text-amber-800 border-amber-200',
+            'Communication': 'bg-blue-100 text-blue-800 border-blue-200',
+            'Business': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            'Finance': 'bg-teal-100 text-teal-800 border-teal-200',
+            'Product': 'bg-sky-100 text-sky-800 border-sky-200',
+            'Mindset': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+            'Governance': 'bg-slate-200 text-slate-800 border-slate-300',
+            'Problem clarity': 'bg-red-100 text-red-800 border-red-200',
+            'Customer understanding': 'bg-orange-100 text-orange-800 border-orange-200',
+            'Solution fit': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+            'MVP / product': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+            'Technology readiness': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+            'Market validation': 'bg-lime-100 text-lime-800 border-lime-200',
+            'Business model': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+            'Traction': 'bg-violet-100 text-violet-800 border-violet-200',
+            'Team capacity': 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+            'Financial readiness': 'bg-teal-100 text-teal-800 border-teal-200',
+            'Legal / IP': 'bg-slate-200 text-slate-800 border-slate-300',
+            'Partnership readiness': 'bg-sky-100 text-sky-800 border-sky-200',
+            'Scalability': 'bg-blue-100 text-blue-800 border-blue-200',
+            'Impact potential': 'bg-green-100 text-green-800 border-green-200'
+        };
+
+        // CATALOGUE VOLET FONDATEUR (12 QUESTIONS)
+        const FOUNDER_MCQ_CATALOGUE = [
+            {
+                id: 'commit', name: 'Commitment', category: 'Engagement', type: 'radio_other',
+                q: { fr: 'Pourquoi ce projet est-il important pour vous ? Qu\'avez-vous sacrifié ou priorisé pour le faire avancer ?', en: 'Why is this venture important to you? What have you sacrificed or prioritized to move it forward?' },
+                options: [
+                    { id: 'a', label: { fr: "C'est une idée parmi d'autres ; j'y consacre du temps libre sans renoncer à d'autres activités.", en: "It's an idea among others; I spend free time on it without sacrificing other activities." } },
+                    { id: 'b', label: { fr: "Motivé(e), mais mes engagements actuels (travail/études) limitent le temps accordé.", en: "Motivated, but current commitments (job/studies) limit the time I can dedicate." } },
+                    { id: 'c', label: { fr: "J'ai réorganisé mon emploi du temps et ajusté mes priorités pour y travailler régulièrement.", en: "I reorganized my schedule and personal priorities to work on it consistently." } },
+                    { id: 'd', label: { fr: "Priorité absolue. Sacrifices majeurs faits pour m'y consacrer à plein temps.", en: "Top priority. Significant sacrifices made to commit full-time." } }
+                ]
+            },
+            {
+                id: 'lead_strat', name: 'Strategic Leadership', category: 'Leadership', type: 'radio_other',
+                q: { fr: 'Comment prenez-vous vos décisions lorsque l\'équipe n\'est pas d\'accord ? Donnez un exemple récent.', en: 'How do you make decisions when the team disagrees? Give a recent example.' },
+                options: [
+                    { id: 'a', label: { fr: "Les désaccords bloquent l'équipe ou j'impose mes choix sans consulter.", en: "Disagreements paralyze the team, or I impose my views without consultation." } },
+                    { id: 'b', label: { fr: "J'écoute les avis mais j'ai du mal à trancher quand les opinions divergent.", en: "I listen to opinions but struggle to make a definitive call when views diverge." } },
+                    { id: 'c', label: { fr: "Je facilite la discussion, recherche un consensus et prends une décision argumentée.", en: "I facilitate discussions, seek consensus, and make reasoned decisions when needed." } },
+                    { id: 'd', label: { fr: "J'utilise les désaccords pour tester nos hypothèses et aligner l'équipe sur des objectifs clairs.", en: "I leverage disagreements to challenge assumptions and align the team around clear goals." } }
+                ]
+            },
+            {
+                id: 'exec_discipline', name: 'Execution discipline', category: 'Execution', type: 'radio',
+                q: { fr: 'À quoi vous étiez-vous engagé(e) à réaliser au cours des 30 derniers jours, et quelles preuves pouvez-vous fournir ?', en: 'What did you commit to completing in the last 30 days, and what evidence can you show?' },
+                options: [
+                    { id: 'a', label: { fr: "Aucun objectif précis fixé ni atteint au cours des 30 derniers jours.", en: "No specific goals were set or achieved in the last 30 days." } },
+                    { id: 'b', label: { fr: "Objectifs fixés mais la plupart ont été reportés par manque de temps/méthode.", en: "Goals were set, but most were delayed due to lack of time or structure." } },
+                    { id: 'c', label: { fr: "La majorité des engagements pris ont été réalisés avec des livrables tangibles.", en: "The majority of commitments were completed with tangible deliverables to show." } },
+                    { id: 'd', label: { fr: "100% des objectifs exécutés à temps avec des preuves d'impact mesurables.", en: "100% of planned strategic goals executed on time with measurable progress." } }
+                ]
+            },
+            {
+                id: 'comm', name: 'Communication', category: 'Communication', type: 'textarea',
+                q: { fr: 'Expliquez votre startup en 60 secondes à un client qui n\'y connaît absolument rien.', en: 'Explain your startup in 60 seconds to a customer who knows nothing about it.' }
+            },
+            {
+                id: 'team_work', name: 'Team Work', category: 'Leadership', type: 'radio',
+                q: { fr: 'Comment les responsabilités sont-elles réparties ? Où se situent les tensions ou compétences manquantes ?', en: 'How are responsibilities divided? Where are the current team tensions or gaps?' },
+                options: [
+                    { id: 'a', label: { fr: "Rôles non définis, chacun fait tout ou le projet repose sur une seule personne.", en: "Roles undefined; everyone works on everything, or relies solely on one person." } },
+                    { id: 'b', label: { fr: "Répartition sur le papier mais engendre des ambiguïtés ou tensions régulières.", en: "Roles assigned, but overlapping responsibilities create ongoing friction." } },
+                    { id: 'c', label: { fr: "Responsabilités clairement réparties et compétences clés identifiées.", en: "Responsibilities clearly divided, and key skill requirements well recognized." } },
+                    { id: 'd', label: { fr: "Équipe très complémentaire avec processus clairs pour gérer lacunes et conflits.", en: "High team synergy with established processes to address skill gaps and resolve conflicts." } }
+                ]
+            },
+            {
+                id: 'biz_acumen', name: 'Business acumen', category: 'Business', type: 'checkbox',
+                q: { fr: 'Qui paie, pourquoi vont-ils payer, et quel est le modèle économique de base de la solution ?', en: 'Who pays, why will they pay, and what is the basic economics of the solution?' },
+                options: [
+                    { id: 'opt_1', label: { fr: "Pas encore identifié qui va payer ni combien coûte la solution.", en: "Haven't identified who will pay or what the solution costs to deliver." } },
+                    { id: 'opt_2', label: { fr: "Idée globale de revenus sans justification tarifaire ni analyse des coûts.", en: "Vague revenue idea, lacking pricing rationale and cost structure." } },
+                    { id: 'opt_3', label: { fr: "Client payeur défini et modèle économique aligné sur le marché.", en: "Paying customer defined, and business model backed by market benchmarks." } },
+                    { id: 'opt_4', label: { fr: "Équations économiques (unit economics, prix, coûts) modélisées et validées.", en: "Unit economics modeled and backed by willingness-to-pay evidence or early sales." } }
+                ]
+            },
+            {
+                id: 'fin_literacy', name: 'Financial literacy', category: 'Finance', type: 'radio',
+                q: { fr: 'Quels sont vos coûts majeurs, vos besoins actuels en trésorerie et vos registres financiers ?', en: 'What are your major costs, current cash needs and financial records?' },
+                options: [
+                    { id: 'a', label: { fr: "Aucune gestion financière ni suivi des dépenses mis en place.", en: "No financial records or expense tracking exist." } },
+                    { id: 'b', label: { fr: "Dépenses passées connues mais pas de prévisionnel pour les mois à venir.", en: "Past expenses known, but no cash flow projections for upcoming months." } },
+                    { id: 'c', label: { fr: "Registre à jour des coûts actuels et besoin de trésorerie à court terme connu.", en: "Updated records of current costs and short-term cash runway needs known." } },
+                    { id: 'd', label: { fr: "Budget prévisionnel, burn rate et besoin en fonds de roulement maîtrisés.", en: "Budget forecasts, burn rate, and runway metrics rigorously tracked and managed." } }
+                ]
+            },
+            {
+                id: 'cust_orientation', name: 'Customer orientation', category: 'Product', type: 'radio',
+                q: { fr: 'À quand remonte votre dernier échange avec un utilisateur/client, et qu\'est-ce qui a changé suite à cela ?', en: 'When did you last speak with a user/customer, and what changed because of that conversation?' },
+                options: [
+                    { id: 'a', label: { fr: "Pas encore parlé directement à des utilisateurs ou clients potentiels.", en: "Have not spoken directly to any potential users or customers yet." } },
+                    { id: 'b', label: { fr: "Échanges passés avec quelques utilisateurs mais sans impact sur le projet.", en: "Spoke to a few users months ago, but it did not impact project choices." } },
+                    { id: 'c', label: { fr: "Entretiens récents ayant permis d'ajuster des fonctionnalités ou offres.", en: "Recent customer interviews led to specific adjustments in our product or offer." } },
+                    { id: 'd', label: { fr: "Échanges hebdomadaires systématiques guidant la feuille de route produit.", en: "Continuous, weekly customer feedback loops directly driving product roadmap." } }
+                ]
+            },
+            {
+                id: 'learn', name: 'Learning agility', category: 'Mindset', type: 'radio',
+                q: { fr: 'Décrivez une hypothèse majeure que vous avez modifiée après avoir obtenu des preuves tangibles.', en: 'Describe a major assumption you changed after receiving evidence.' },
+                options: [
+                    { id: 'a', label: { fr: "Pas de changement d'avis malgré retours négatifs ou critiques.", en: "Haven't changed initial idea despite negative feedback or conflicting data." } },
+                    { id: 'b', label: { fr: "Conscience de retours contraires mais hésitation à faire pivoter l'idée.", en: "Aware of opposing feedback, but hesitate to adjust or pivot the concept." } },
+                    { id: 'c', label: { fr: "Modification d'une hypothèse importante suite à des faits concrets.", en: "Modified a major assumption (pricing, feature, target) after gathering evidence." } },
+                    { id: 'd', label: { fr: "Culture d'expérimentation rapide : adaptations/pivots faits sur preuves.", en: "High experimental speed: fast pivots or strategic adaptations backed by data." } }
+                ]
+            },
+            {
+                id: 'resilience', name: 'Resilience', category: 'Mindset', type: 'textarea',
+                q: { fr: 'Décrivez un revers ou échec rencontré et ce que vous avez mis en œuvre dans les sept jours suivants.', en: 'Describe a setback and what you did in the following seven days.' }
+            },
+            {
+                id: 'ethics_trust', name: 'Ethics / trust', category: 'Governance', type: 'radio_structured',
+                q: { fr: 'Comment gérez-vous les données clients, les finances, la propriété de l\'entreprise et les engagements envers les partenaires ?', en: 'How do you handle customer data, money, ownership and commitments to partners?' },
+                options: [
+                    {
+                        id: 'a',
+                        title: { fr: "Option A : Stade initial / Projet non opérationnel", en: "Option A: Initial stage / Non-operational project" },
+                        items: [
+                            { fr: "Aucun client ni flux financier à ce jour.", en: "No customers or cash flows to date." },
+                            { fr: "Propriété détenue à 100 % par le porteur de projet.", en: "100% owned by lead founder." },
+                            { fr: "Aucun engagement formalisé avec des tiers.", en: "No formal third-party commitments." },
+                            { fr: "Processus de gestion non applicables actuellement.", en: "Management processes currently non-applicable." }
+                        ]
+                    },
+                    {
+                        id: 'b',
+                        title: { fr: "Option B : Gouvernance stricte et automatisée", en: "Option B: Strict & automated governance" },
+                        items: [
+                            { fr: "Sécurité maximale des données clients.", en: "Maximal customer data security." },
+                            { fr: "Comptabilité rigoureuse et transparente.", en: "Rigorous and transparent accounting." },
+                            { fr: "Respect total des pactes d'associés.", en: "Full compliance with cofounder agreements." },
+                            { fr: "Suivi formalisé des engagements partenaires.", en: "Formalized partner commitment tracking." }
+                        ]
+                    },
+                    {
+                        id: 'c',
+                        title: { fr: "Option C : Gestion centralisée par la direction", en: "Option C: Direction-centralized management" },
+                        items: [
+                            { fr: "Contrôle direct par le fondateur.", en: "Direct founder control." },
+                            { fr: "Suivi financier interne régulier.", en: "Regular internal financial tracking." },
+                            { fr: "Propriété exclusive ou clairement définie.", en: "Exclusive or clearly assigned ownership." },
+                            { fr: "Négociation directe des partenariats.", en: "Direct partnership negotiations." }
+                        ]
+                    },
+                    {
+                        id: 'd',
+                        title: { fr: "Option D : Approche collaborative et partagée", en: "Option D: Collaborative & shared approach" },
+                        items: [
+                            { fr: "Partage des accès selon les rôles.", en: "Role-based access sharing." },
+                            { fr: "Validation collégiale des décisions financières.", en: "Collegial validation for financial decisions." },
+                            { fr: "Gouvernance ouverte avec les parties prenantes.", en: "Open governance with stakeholders." },
+                            { fr: "Transparence active envers les partenaires.", en: "Active partner transparency." }
+                        ]
+                    },
+                    {
+                        id: 'e',
+                        title: { fr: "Option E : Processus en cours de structuration", en: "Option E: Processes undergoing structuring" },
+                        items: [
+                            { fr: "Outils de base en déploiement.", en: "Basic tools being deployed." },
+                            { fr: "Amélioration continue de la conformité.", en: "Continuous compliance improvement." },
+                            { fr: "Formalisation progressive des accords.", en: "Progressive agreement formalization." },
+                            { fr: "Ajustement des pratiques selon la croissance.", en: "Practice adjustments based on growth." }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: 'availabilty', name: 'Availability', category: 'Engagement', type: 'radio',
+                q: { fr: 'Combien d\'heures par semaine pouvez-vous consacrer à l\'incubation et à l\'exécution ?', en: 'How many hours per week can you commit to incubation and execution?' },
+                options: [
+                    { id: 'a', label: { fr: "Moins de 10 heures par semaine.", en: "Less than 10 hours per week." } },
+                    { id: 'b', label: { fr: "Entre 10 et 20 heures par semaine (temps partiel faible).", en: "Between 10 and 20 hours per week (light part-time)." } },
+                    { id: 'c', label: { fr: "Entre 20 et 35 heures par semaine (temps partiel important).", en: "Between 20 and 35 hours per week (significant part-time)." } },
+                    { id: 'd', label: { fr: "Plus de 35 heures par semaine (Plein temps dédié).", en: "More than 35 hours per week (Full-time commitment)." } }
+                ]
+            }
+        ];
+
+        // CATALOGUE VOLET STARTUP (14 QUESTIONS)
+        const STARTUP_MCQ_CATALOGUE = [
+            {
+                id: 'problem_clarity', name: 'Problem clarity', category: 'Problem clarity', type: 'textarea',
+                q: { fr: 'Quel problème exact résolvez-vous ? Pour qui ? À quelle fréquence survient-il ?', en: 'What exact problem are you solving? For whom? How frequently does it occur?' }
+            },
+            {
+                id: 'cust_problem', name: 'Customer understanding', category: 'Customer understanding', type: 'radio',
+                q: { fr: 'Qui est l\'utilisateur principal ?', en: 'Who is the primary user ?' },
+                options: [
+                    { id: 'a', label: { fr: "Pas de distinction utilisateur/payeur, aucun échange terrain réalisé.", en: "No distinction between user and buyer; zero field research conducted." } },
+                    { id: 'b', label: { fr: "Hypothèses basées sur quelques retours informels.", en: "Assumptions about users and buyers based on informal conversations." } },
+                    { id: 'c', label: { fr: "Personas définis avec preuve d'intérêt via entretiens structurés.", en: "Clear personas defined with interest validated through structured interviews." } },
+                    { id: 'd', label: { fr: "Cartographie utilisateur vs payeur validée par précommandes/contrats.", en: "User vs. buyer mapping validated by LOIs, pre-orders, or early contracts." } }
+                ]
+            },
+            {
+                id: 'sol_fit', name: 'Solution fit', category: 'Solution fit', type: 'textarea',
+                q: { fr: 'Pourquoi votre solution est-elle meilleure que l\'alternative actuellement utilisée ?', en: 'Why is your solution better than the current alternative?' }
+            },
+            {
+                id: 'mvp_prod', name: 'MVP / product', category: 'MVP / product', type: 'radio',
+                q: { fr: 'Que peut tester un utilisateur aujourd\'hui ? Qu\'est-ce qui reste encore au stade de concept ?', en: 'What can a user test today? What is still conceptual?' },
+                options: [
+                    { id: 'a', label: { fr: "Simple idée, maquettes papier ou concept théorique non testable.", en: "Pure concept, paper mockups, or theoretical design." } },
+                    { id: 'b', label: { fr: "Maquettes/Wireframes interactifs (Figma) sans logique fonctionnelle.", en: "Interactive wireframes/prototypes (Figma) without live logic." } },
+                    { id: 'c', label: { fr: "MVP fonctionnel (No-code ou prototype) utilisable par bêta-testeurs.", en: "Functional MVP (No-code or prototype) usable by beta testers." } },
+                    { id: 'd', label: { fr: "Produit robuste fonctionnant en réel avec utilisateurs actifs réguliers.", en: "Live product operating in real conditions with active, recurring users." } }
+                ]
+            },
+            {
+                id: 'tech_ready', name: 'Technology readiness', category: 'Technology readiness', type: 'radio',
+                q: { fr: 'La technologie cœur fonctionne-t-elle de manière fiable ? Quels sont les risques techniques majeurs ?', en: 'Is the core technology working reliably? What are the main technical risks?' },
+                options: [
+                    { id: 'a', label: { fr: "La faisabilité technique n'a pas encore été prouvée.", en: "Technical feasibility remains unproven." } },
+                    { id: 'b', label: { fr: "Architecture définie mais comportant de nombreux bugs et instabilités.", en: "Architecture defined, but unstable with significant bug risks." } },
+                    { id: 'c', label: { fr: "Brique technique principale fonctionnelle en environnement contrôlé.", en: "Core technology working reliably in a controlled testing environment." } },
+                    { id: 'd', label: { fr: "Infrastructure technique stable, sécurisée, évolutive et testée.", en: "Stable, secure, scalable, and stress-tested technical infrastructure." } }
+                ]
+            },
+            {
+                id: 'market_validation', name: 'Market validation', category: 'Market validation', type: 'radio',
+                q: { fr: 'Combien d\'entretiens clients, de tests, de pilotes, d\'utilisateurs ou de transactions avez-vous réalisés ?', en: 'How many customer interviews, tests, pilots, users or transactions have you completed?' },
+                options: [
+                    { id: 'a', label: { fr: "Moins de 5 entretiens, aucune transaction ni test utilisateur.", en: "Fewer than 5 interviews; zero transactions or user tests." } },
+                    { id: 'b', label: { fr: "10 à 20 entretiens qualitatifs mais pas de pilote payant/concret.", en: "10-20 qualitative interviews, but no concrete or paying pilot." } },
+                    { id: 'c', label: { fr: "Plus de 30 entretiens, landing page testée ou premier pilote gratuit.", en: "30+ interviews completed, landing page tested, or active free pilot." } },
+                    { id: 'd', label: { fr: "Pilotes payants validés, croissance d'utilisateurs ou ventes récurrentes.", en: "Validated paying pilots, active user growth, or recurring sales." } }
+                ]
+            },
+            {
+                id: 'business_model', name: 'Business model', category: 'Business model', type: 'checkbox',
+                q: { fr: 'Comment le projet va-t-il générer et conserver de la valeur financière ?', en: 'How will the venture generate and retain value?' },
+                options: [
+                    { id: 'bm_1', label: { fr: "Modèle de revenus indéterminé ou dépendant de subventions.", en: "Undefined revenue model or sole reliance on ads/grants." } },
+                    { id: 'bm_2', label: { fr: "Modèle choisi mais sans grille tarifaire ni logique de marges.", en: "Revenue stream chosen, but lacks pricing structure or margin logic." } },
+                    { id: 'bm_3', label: { fr: "Grille tarifaire définie et alignée sur la valeur perçue du marché.", en: "Clear pricing structure defined and aligned with market value." } },
+                    { id: 'bm_4', label: { fr: "Modèle économique testé en réel, récurrent, avec marges prévisibles.", en: "Live-tested, recurring business model with predictable margins." } }
+                ]
+            },
+            {
+                id: 'traction', name: 'Traction', category: 'Traction', type: 'radio',
+                q: { fr: 'Qu\'est-ce qui a changé au niveau des utilisateurs, des revenus, des partenariats ou de l\'usage du produit au cours des 90 derniers jours ?', en: 'What has changed in users, revenue, partnerships or product usage over the last 90 days?' },
+                options: [
+                    { id: 'a', label: { fr: "Stagnation complète au cours des 90 derniers jours.", en: "Complete stagnation over the last 90 days." } },
+                    { id: 'b', label: { fr: "Progrès mineurs (ajustement du site, quelques inscrits newsletter).", en: "Minor progress (website tweaks, a few newsletter signups)." } },
+                    { id: 'c', label: { fr: "Croissance visible des métriques clés (utilisateurs, partenariats).", en: "Visible growth in core metrics (users, engagement, signed partners)." } },
+                    { id: 'd', label: { fr: "Forte accélération (croissance mensuelle à deux chiffres de l'usage/CA).", en: "Strong acceleration (double-digit MoM growth in revenue or usage)." } }
+                ]
+            },
+            {
+                id: 'team_capacity', name: 'Team capacity', category: 'Team capacity', type: 'checkbox',
+                q: { fr: 'Quelles compétences critiques sont présentes dans l\'équipe et lesquelles manquent ?', en: 'Which critical skills are present and which are missing?' },
+                options: [
+                    { id: 'tc_1', label: { fr: "Lacunes majeures dans l'équipe sur le cœur de métier (ex: pas de Tech).", en: "Major skill gaps in core functions (e.g., no technical capability)." } },
+                    { id: 'tc_2', label: { fr: "Équipe incomplète s'appuyant ponctuellement sur des prestataires.", en: "Incomplete team relying heavily on temporary external freelancers." } },
+                    { id: 'tc_3', label: { fr: "Compétences essentielles (Tech + Produit/Business) couvertes en interne.", en: "Essential skills (Tech + Product or Business) covered in-house." } },
+                    { id: 'tc_4', label: { fr: "Équipe pluridisciplinaire expérimentée et 100% autonome pour exécuter.", en: "Experienced, multi-disciplinary team fully autonomous in executing." } }
+                ]
+            },
+            {
+                id: 'financial_readiness', name: 'Financial readiness', category: 'Financial readiness', type: 'radio',
+                q: { fr: 'Suivez-vous les coûts, les revenus, les besoins de trésorerie et l\'utilisation des fonds ?', en: 'Do you track costs, revenue, cash needs and use of funds?' },
+                options: [
+                    { id: 'a', label: { fr: "Pas de comptabilité, pas de suivi du compte bancaire ni trésorerie.", en: "No accounting, bank balance tracking, or future runway planning." } },
+                    { id: 'b', label: { fr: "Suivi basique des factures sans tableau de bord financier.", en: "Basic invoice tracking without a financial dashboard." } },
+                    { id: 'c', label: { fr: "Modèle financier établi avec projections de trésorerie sur 12 mois.", en: "Established financial model with a 12-month cash runway forecast." } },
+                    { id: 'd', label: { fr: "Gestion professionnelle : plan d'affectation et de trésorerie maîtrisé.", en: "Professional financial management: capital allocation and cash flow control." } }
+                ]
+            },
+            {
+                id: 'legal_ip', name: 'Legal / IP', category: 'Legal / IP', type: 'radio',
+                q: { fr: 'À qui appartient le produit/code/marque ? Existe-t-il des enjeux réglementaires ou de données ?', en: 'Who owns the product/code/brand? Are there regulatory or data issues?' },
+                options: [
+                    { id: 'a', label: { fr: "Statut juridique non créé, propriété code/marque floue ou non cédée.", en: "No legal entity; product/code/brand ownership unassigned or unclear." } },
+                    { id: 'b', label: { fr: "Entreprise enregistrée mais statuts/accords d'associés basiques.", en: "Company incorporated, but basic cofounder agreements are unaligned." } },
+                    { id: 'c', label: { fr: "Propriété intellectuelle sécurisée au nom de la société.", en: "Intellectual property fully assigned to the company; path mapped." } },
+                    { id: 'd', label: { fr: "Protection IP complète (brevets/marques), pacte signé, conformité totale.", en: "Complete IP protection, signed cofounder agreement, full compliance." } }
+                ]
+            },
+            {
+                id: 'partnership_readiness', name: 'Partnership readiness', category: 'Partnership readiness', type: 'radio',
+                q: { fr: 'Quels partenaires sont nécessaires et quelle valeur concrète pouvez-vous leur offrir ?', en: 'Which partners are needed and what concrete value can you offer them?' },
+                options: [
+                    { id: 'a', label: { fr: "Aucun partenaire identifié ou attentes irréalistes envers les tiers.", en: "No partners identified or unrealistic expectations from third parties." } },
+                    { id: 'b', label: { fr: "Liste de partenaires cibles sans premier contact ni valeur définie.", en: "Target partners identified, but no outreach or clear value defined." } },
+                    { id: 'c', label: { fr: "Discussions avancées en cours avec des partenaires clés.", en: "Advanced discussions underway with strategic partners." } },
+                    { id: 'd', label: { fr: "Partenariats stratégiques signés apportant distribution ou technologie.", en: "Formal strategic partnerships signed, delivering distribution or tech." } }
+                ]
+            },
+            {
+                id: 'scalability', name: 'Scalability', category: 'Scalability', type: 'textarea',
+                q: { fr: 'Qu\'est-ce qui doit devenir moins cher, être automatisé ou standardisé pour grandir ?', en: 'What must become cheaper, automated or standardized to grow?' }
+            },
+            {
+                id: 'impact_potential', name: 'Impact potential', category: 'Impact potential', type: 'radio',
+                q: { fr: 'Quel changement économique, social ou environnemental mesurable le projet peut-il créer ?', en: 'What measurable economic, social or environmental change could the venture create?' },
+                options: [
+                    { id: 'a', label: { fr: "Pas de réflexion sur l'impact économique, social ou environnemental.", en: "No consideration of economic, social, or environmental impact." } },
+                    { id: 'b', label: { fr: "Intention d'impact exprimée mais sans indicateur de mesure précis.", en: "Positive impact intent expressed, but lacks measurable KPIs." } },
+                    { id: 'c', label: { fr: "Indicateurs d'impact définis (ex: emplois créés, émission évitée).", en: "Clear impact metrics defined (jobs created, CO2 saved, income)." } },
+                    { id: 'd', label: { fr: "Modèle d'impact mesurable, nativement lié à la croissance du CA.", en: "Measurable impact core to business model, scaling with revenue." } }
+                ]
+            }
+        ];
+
+        const MAX_PTS_FOUNDER = FOUNDER_MCQ_CATALOGUE.length * 5; // 60 pts
+        const MAX_PTS_STARTUP = STARTUP_MCQ_CATALOGUE.length * 5; // 70 pts
+
+        function App() {
+            const [lang, setLang] = useState('fr');
+            const [candidates, setCandidates] = useState([]);
+            const [selectedCandidateId, setSelectedCandidateId] = useState(null);
+            const [evalType, setEvalType] = useState('founder'); // 'founder' | 'startup'
+            const [isLoading, setIsLoading] = useState(false);
+            const [isSubmitting, setIsSubmitting] = useState(false);
+            const [isJuryAuthenticated, setIsJuryAuthenticated] = useState(false);
+            const [passwordInput, setPasswordInput] = useState('');
+            const [passwordError, setPasswordError] = useState(false);
+
+            // ÉTATS DES MODALES (POP-UPS)
+            const [missingScoresModal, setMissingScoresModal] = useState(null); // { founder: [], startup: [] }
+            const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+            const t = I18N[lang];
+
+            // 1. CHARGEMENT INITIAL (LOCALSTORAGE)
+            useEffect(() => {
+                const localData = localStorage.getItem('jury_evaluations_v1');
+                if (localData) {
+                    try {
+                        const parsed = JSON.parse(localData);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            setCandidates(parsed);
+                            setSelectedCandidateId(parsed[0].id);
+                        }
+                    } catch (e) {
+                        console.error("Erreur de lecture du localStorage :", e);
+                    }
+                }
+                loadCandidatesFromSheets();
+            }, []);
+
+            // 2. SAUVEGARDE EN LOCALSTORAGE À CHAQUE MODIFICATION
+            useEffect(() => {
+                if (candidates.length > 0) {
+                    localStorage.setItem('jury_evaluations_v1', JSON.stringify(candidates));
+                }
+            }, [candidates]);
+
+            // CHARGEMENT DEPUIS GOOGLE SHEETS EN FUSIONNANT AVEC LE LOCALSTORAGE
+            const loadCandidatesFromSheets = async () => {
+                setIsLoading(true);
+                try {
+                    const response = await fetch(GOOGLE_SCRIPT_URL);
+                    const remoteData = await response.json();
+                    if (Array.isArray(remoteData) && remoteData.length > 0) {
+                        setCandidates(prevCandidates => {
+                            // Fusionner les données distantes avec les notes conservées en local
+                            const merged = remoteData.map(remoteItem => {
+                                const localItem = prevCandidates.find(p => p.id === remoteItem.id);
+                                return {
+                                    ...remoteItem,
+                                    jury_scores: {
+                                        ...(remoteItem.jury_scores || {}),
+                                        ...(localItem ? localItem.jury_scores : {})
+                                    }
+                                };
+                            });
+                            return merged;
+                        });
+                        if (!selectedCandidateId) {
+                            setSelectedCandidateId(remoteData[0].id);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Erreur de récupération Google Sheets :", err);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const handleJuryScoreChange = (candId, skillId, scoreVal) => {
+                setCandidates(candidates.map(c => {
+                    if (c.id === candId) {
+                        const jury_scores = { ...(c.jury_scores || {}) };
+                        jury_scores[skillId] = parseInt(scoreVal, 10);
+                        return { ...c, jury_scores };
+                    }
+                    return c;
+                }));
+            };
+
+            const calculateScores = (cand) => {
+                if (!cand) return { fObtained: 0, sObtained: 0, fPct: 0, sPct: 0, totalObtained: 0, totalMax: MAX_PTS_FOUNDER + MAX_PTS_STARTUP, globalPct: 0 };
+
+                let fObtained = 0;
+                FOUNDER_MCQ_CATALOGUE.forEach(s => {
+                    fObtained += (cand.jury_scores?.[s.id] || 0);
+                });
+
+                let sObtained = 0;
+                STARTUP_MCQ_CATALOGUE.forEach(s => {
+                    sObtained += (cand.jury_scores?.[s.id] || 0);
+                });
+
+                const fPct = Math.round((fObtained / MAX_PTS_FOUNDER) * 100);
+                const sPct = Math.round((sObtained / MAX_PTS_STARTUP) * 100);
+                const totalObtained = fObtained + sObtained;
+                const totalMax = MAX_PTS_FOUNDER + MAX_PTS_STARTUP;
+                const globalPct = Math.round((totalObtained / totalMax) * 100);
+
+                return { fObtained, sObtained, fPct, sPct, totalObtained, totalMax, globalPct };
+            };
+
+            // VERIFICATION ET SOUMISSION DES NOTES JURY
+            const handleSubmitJuryScores = async (cand) => {
+                const juryScores = cand.jury_scores || {};
+
+                // 1. Détection des notes manquantes
+                const unratedFounder = FOUNDER_MCQ_CATALOGUE.filter(q => !juryScores[q.id]);
+                const unratedStartup = STARTUP_MCQ_CATALOGUE.filter(q => !juryScores[q.id]);
+
+                if (unratedFounder.length > 0 || unratedStartup.length > 0) {
+                    setMissingScoresModal({
+                        founder: unratedFounder,
+                        startup: unratedStartup
+                    });
+                    if (unratedFounder.length > 0) setEvalType('founder');
+                    else if (unratedStartup.length > 0) setEvalType('startup');
+                    return;
+                }
+
+                // 2. Envoi vers Google Sheets (colonne ScoresJuryJSON)
+                setIsSubmitting(true);
+                const payload = {
+                    action: 'update_jury_scores',
+                    candidate_id: cand.id,
+                    jury_scores: juryScores
+                };
+
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    setIsSubmitting(false);
+                    setShowSuccessModal(true);
+                } catch (err) {
+                    console.error("Erreur de soumission :", err);
+                    setIsSubmitting(false);
+                    alert(t.submitError);
+                }
+            };
+
+            const handleExportExcel = () => {
+                const wb = XLSX.utils.book_new();
+                const overview = candidates.map(c => {
+                    const sc = calculateScores(c);
+                    return {
+                        ID: c.id,
+                        Startup: c.startup_name,
+                        Fondateur: c.founder_name,
+                        Email: c.email,
+                        "Note Fondateur": `${sc.fObtained} / ${MAX_PTS_FOUNDER} (${sc.fPct}%)`,
+                        "Note Startup": `${sc.sObtained} / ${MAX_PTS_STARTUP} (${sc.sPct}%)`,
+                        "Score Global": `${sc.totalObtained} / ${sc.totalMax} (${sc.globalPct}%)`
+                    };
+                });
+                XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(overview), "Rapport Notation Jury");
+                XLSX.writeFile(wb, "Rapport_Jury_Incubateur.xlsx");
+            };
+
+            const handleAuthenticateJury = (e) => {
+                e.preventDefault();
+                if (passwordInput === JURY_PASSWORD) {
+                    setIsJuryAuthenticated(true);
+                    setPasswordError(false);
+                    setPasswordInput('');
+                } else {
+                    setPasswordError(true);
+                }
+            };
+
+            // ÉCRAN D'AUTHENTIFICATION JURY
+            if (!isJuryAuthenticated) {
+                return (
+                    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6">
+                            <div className="text-center space-y-2">
+                                <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-2xl font-bold mx-auto">🔒</div>
+                                <h2 className="text-2xl font-extrabold text-slate-900">{t.authTitle}</h2>
+                                <p className="text-xs text-slate-500">{t.authSubtitle}</p>
+                            </div>
+
+                            <form onSubmit={handleAuthenticateJury} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-700 mb-1">{t.passLabel}</label>
+                                    <input
+                                        type="password"
+                                        autoFocus
+                                        value={passwordInput}
+                                        onChange={(e) => setPasswordInput(e.target.value)}
+                                        placeholder={t.passPlaceholder}
+                                        className="w-full border p-3 rounded-xl text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                {passwordError && (
+                                    <p className="text-xs font-bold text-rose-600 text-center">{t.wrongPass}</p>
+                                )}
+                                <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white py-3 rounded-xl text-xs font-bold shadow-lg transition">
+                                    {t.unlockBtn}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 pb-12">
+                    {/* HEADER */}
+                    <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center shadow-md">
+                        <div className="flex items-center space-x-3">
+                            <div className="bg-indigo-600 p-2 rounded-lg font-bold">JURY</div>
+                            <div>
+                                <h1 className="text-xl font-bold">{t.appTitle}</h1>
+                                <p className="text-xs text-slate-400">{t.appSubtitle}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                            {/* BOUTON BILINGUE */}
+                            <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                                <button onClick={() => setLang('fr')} className={`px-3 py-1 rounded text-xs font-bold ${lang === 'fr' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>FR</button>
+                                <button onClick={() => setLang('en')} className={`px-3 py-1 rounded text-xs font-bold ${lang === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>EN</button>
+                            </div>
+
+                            <button onClick={loadCandidatesFromSheets} disabled={isLoading} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-2 rounded-lg text-xs font-bold border border-slate-700">
+                                {isLoading ? t.loading : t.refreshBtn}
+                            </button>
+                            <button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-bold shadow">
+                                {t.exportBtn}
+                            </button>
+                            <button onClick={() => setIsJuryAuthenticated(false)} className="bg-rose-950 text-rose-300 hover:bg-rose-900 px-3 py-2 rounded-lg text-xs font-bold border border-rose-800">
+                                {t.lockBtn}
+                            </button>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+                        {/* BANDEAU SÉLECTEUR DE CANDIDATS */}
+                        <div className="space-y-2">
+                            <h2 className="text-xs font-bold text-slate-500 uppercase">{t.candidatesTitle} ({candidates.length})</h2>
+                            <div className="flex space-x-2 overflow-x-auto pb-2">
+                                {candidates.length === 0 ? (
+                                    <div className="text-xs text-slate-400 bg-white p-3 rounded-xl border italic">
+                                        {isLoading ? t.loading : t.noCandidates}
+                                    </div>
+                                ) : (
+                                    candidates.map(c => (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => setSelectedCandidateId(c.id)}
+                                            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition border flex items-center space-x-2 ${selectedCandidateId === c.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                        >
+                                            <span>{c.startup_name || 'Sans Nom'}</span>
+                                            <span className="opacity-60 font-normal">({c.founder_name || 'Inconnu'})</span>
+                                        </button>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        {selectedCandidateId ? (() => {
+                            const cand = candidates.find(c => c.id === selectedCandidateId);
+                            if (!cand) return null;
+
+                            const sc = calculateScores(cand);
+                            const activeCatalogue = evalType === 'founder' ? FOUNDER_MCQ_CATALOGUE : STARTUP_MCQ_CATALOGUE;
+
+                            return (
+                                <div className="space-y-6">
+                                    {/* DASHBOARD SÉLECTION */}
+                                    <div className="bg-slate-900 text-white p-6 rounded-2xl shadow-xl grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                                        <div>
+                                            <span className="text-xs bg-indigo-500/30 text-indigo-300 font-bold px-2.5 py-1 rounded-full uppercase">{t.dossierLabel}</span>
+                                            <h2 className="text-2xl font-extrabold mt-2">{cand.startup_name}</h2>
+                                            <p className="text-xs text-slate-400 mt-1">{t.founderLabel} : {cand.founder_name} | {cand.email}</p>
+                                        </div>
+
+                                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 space-y-2 text-xs">
+                                            <div className="flex justify-between">
+                                                <span className="text-indigo-300 font-bold">{t.scoreFounder} :</span>
+                                                <span className="font-extrabold">{sc.fObtained} / {MAX_PTS_FOUNDER} pts ({sc.fPct}%)</span>
+                                            </div>
+                                            <div className="w-full bg-slate-700 rounded-full h-2">
+                                                <div className="bg-indigo-500 h-2 rounded-full transition-all" style={{ width: `${sc.fPct}%` }}></div>
+                                            </div>
+
+                                            <div className="flex justify-between pt-1">
+                                                <span className="text-emerald-300 font-bold">{t.scoreStartup} :</span>
+                                                <span className="font-extrabold">{sc.sObtained} / {MAX_PTS_STARTUP} pts ({sc.sPct}%)</span>
+                                            </div>
+                                            <div className="w-full bg-slate-700 rounded-full h-2">
+                                                <div className="bg-emerald-500 h-2 rounded-full transition-all" style={{ width: `${sc.sPct}%` }}></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-indigo-950 p-4 rounded-xl border border-indigo-800 text-center">
+                                            <p className="text-xs text-indigo-300 font-bold uppercase">{t.globalMaturity}</p>
+                                            <p className="text-3xl font-extrabold mt-1">{sc.totalObtained} <span className="text-sm font-normal text-slate-400">/ {sc.totalMax} pts</span></p>
+                                            <p className="text-xs text-emerald-400 font-bold mt-1">{sc.globalPct}% {t.advancement}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* ONGLETS BASCULE VOLETS */}
+                                    <div className="flex bg-white p-1.5 rounded-xl border border-slate-200">
+                                        <button
+                                            onClick={() => setEvalType('founder')}
+                                            className={`flex-1 py-3 rounded-lg text-xs font-bold transition ${evalType === 'founder' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                            {t.founderTab}
+                                        </button>
+                                        <button
+                                            onClick={() => setEvalType('startup')}
+                                            className={`flex-1 py-3 rounded-lg text-xs font-bold transition ${evalType === 'startup' ? 'bg-emerald-600 text-white shadow' : 'text-slate-600 hover:bg-slate-50'}`}
+                                        >
+                                            {t.startupTab}
+                                        </button>
+                                    </div>
+
+                                    {/* LISTE DES QUESTIONS */}
+                                    <div className="space-y-6">
+                                        {activeCatalogue.map((mcq, idx) => {
+                                            const answerData = cand.answers?.[mcq.id] || {};
+                                            const juryScore = cand.jury_scores?.[mcq.id] || 0;
+                                            const catStyle = CATEGORY_STYLES[mcq.category] || 'bg-slate-100 text-slate-700 border-slate-200';
+
+                                            return (
+                                                <div key={mcq.id} className={`bg-white p-6 rounded-2xl border shadow-sm space-y-4 transition ${!juryScore ? 'border-amber-300 ring-1 ring-amber-100' : 'border-slate-200'}`}>
+                                                    <div className="flex justify-between items-start border-b pb-3">
+                                                        <div>
+                                                            <div className="flex items-center space-x-2">
+                                                                <span className="text-xs font-bold text-slate-400">Q{idx + 1}.</span>
+                                                                <h4 className="font-bold text-slate-900 text-base">{mcq.name}</h4>
+                                                                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold border ${catStyle}`}>
+                                                                    {mcq.category}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-indigo-700 font-medium italic mt-1">"{mcq.q[lang]}"</p>
+                                                        </div>
+
+                                                        <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${juryScore ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-rose-50 text-rose-600 border-rose-200'}`}>
+                                                            {t.scoreJury} {juryScore ? `${juryScore} / 5 pts` : 'Non noté'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* LECTURE DE LA RÉPONSE */}
+                                                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                                                        <span className="font-bold text-slate-500 uppercase tracking-wide">{t.candidateAnswer}</span>
+                                                        <div className="mt-2 text-slate-900 font-medium">
+                                                            {(() => {
+                                                                if (mcq.type === 'textarea') {
+                                                                    return answerData.textAnswer ? (
+                                                                        <p className="whitespace-pre-wrap bg-white p-3 rounded-lg border">{answerData.textAnswer}</p>
+                                                                    ) : <i className="text-slate-400">{t.noTextAnswer}</i>;
+                                                                }
+                                                                if (mcq.type === 'radio_other' && answerData.selectedOption === 'other') {
+                                                                    return <p className="bg-white p-3 rounded-lg border">{answerData.otherText || <i className="text-slate-400">{t.noOptionAnswer}</i>}</p>;
+                                                                }
+                                                                if (mcq.type === 'checkbox') {
+                                                                    const sel = (answerData.selectedCheckbox || []).map(id => {
+                                                                        const o = mcq.options.find(opt => opt.id === id);
+                                                                        return o ? o.label[lang] : id;
+                                                                    });
+                                                                    return sel.length > 0 ? (
+                                                                        <ul className="list-disc pl-5 space-y-1 bg-white p-3 rounded-lg border">
+                                                                            {sel.map((s, i) => <li key={i}>{s}</li>)}
+                                                                        </ul>
+                                                                    ) : <i className="text-slate-400">{t.noCheckboxAnswer}</i>;
+                                                                }
+                                                                if (answerData.selectedOption) {
+                                                                    const opt = mcq.options.find(o => o.id === answerData.selectedOption);
+                                                                    return (
+                                                                        <p className="bg-white p-3 rounded-lg border">
+                                                                            {opt ? (opt.label ? opt.label[lang] : opt.title[lang]) : answerData.selectedOption}
+                                                                        </p>
+                                                                    );
+                                                                }
+                                                                return <i className="text-slate-400">{t.noRadioAnswer}</i>;
+                                                            })()}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* ATTRIBUTION DE LA NOTE */}
+                                                    <div className="bg-indigo-50/70 p-4 rounded-xl border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                                        <span className="text-xs font-bold text-indigo-950">{t.assignScore}</span>
+                                                        <div className="flex items-center space-x-2">
+                                                            {[1, 2, 3, 4, 5].map((score) => (
+                                                                <button
+                                                                    key={score}
+                                                                    onClick={() => handleJuryScoreChange(cand.id, mcq.id, score)}
+                                                                    className={`w-10 h-10 rounded-xl font-extrabold text-xs transition border ${juryScore === score
+                                                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md scale-105'
+                                                                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                                                        }`}
+                                                                >
+                                                                    {score}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* BOUTON SOUMETTRE L'ÉVALUATION */}
+                                    <div className="pt-4 flex justify-end">
+                                        <button
+                                            disabled={isSubmitting}
+                                            onClick={() => handleSubmitJuryScores(cand)}
+                                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-bold text-sm px-8 py-4 rounded-xl shadow-lg transition flex items-center space-x-2"
+                                        >
+                                            {isSubmitting ? (
+                                                <span>⏳ {t.submittingBtn}</span>
+                                            ) : (
+                                                <span>✓ {t.submitJuryBtn}</span>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })() : (
+                            <div className="bg-white p-12 rounded-2xl border text-center text-slate-400 text-xs">
+                                {t.noSelectionPrompt}
+                            </div>
+                        )}
+                    </main>
+
+                    {/* POP-UP MODAL DES NOTES MANQUANTES */}
+                    {missingScoresModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-rose-100">
+                                <div className="flex items-center space-x-3 text-rose-600">
+                                    <div className="bg-rose-100 p-3 rounded-xl font-bold text-xl">⚠️</div>
+                                    <div>
+                                        <h3 className="font-bold text-slate-900 text-lg">{t.missingScoresTitle}</h3>
+                                        <p className="text-xs text-slate-500 mt-0.5">{t.missingScoresMsg}</p>
+                                    </div>
+                                </div>
+
+                                <div className="max-h-60 overflow-y-auto space-y-3 bg-slate-50 p-3 rounded-xl border text-xs">
+                                    {missingScoresModal.founder.length > 0 && (
+                                        <div>
+                                            <p className="font-bold text-indigo-700 mb-1">{t.missingFounder} ({missingScoresModal.founder.length}) :</p>
+                                            <ul className="list-disc pl-5 text-slate-700 space-y-0.5">
+                                                {missingScoresModal.founder.map(q => <li key={q.id}>{q.name}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                    {missingScoresModal.startup.length > 0 && (
+                                        <div className="mt-2">
+                                            <p className="font-bold text-emerald-700 mb-1">{t.missingStartup} ({missingScoresModal.startup.length}) :</p>
+                                            <ul className="list-disc pl-5 text-slate-700 space-y-0.5">
+                                                {missingScoresModal.startup.map(q => <li key={q.id}>{q.name}</li>)}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <button
+                                    onClick={() => setMissingScoresModal(null)}
+                                    className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl text-xs font-bold transition shadow-md"
+                                >
+                                    {t.closeBtn}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* POP-UP MODAL DE CONFIRMATION DE SOUMISSION RÉUSSIE */}
+                    {showSuccessModal && (
+                        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                            <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center space-y-4 border border-emerald-100">
+                                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl font-bold mx-auto">
+                                    ✓
+                                </div>
+                                <h3 className="font-extrabold text-slate-900 text-xl">{t.submittedSuccess}</h3>
+                                <button
+                                    onClick={() => setShowSuccessModal(false)}
+                                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl text-xs font-bold shadow-lg transition"
+                                >
+                                    OK
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+
+</html>
